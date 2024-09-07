@@ -1,0 +1,330 @@
+// Requires official Node.js MongoDB Driver 3.0.0+
+var mongodb = require("mongodb");
+var ObjectID = mongodb.ObjectID;
+
+var client = mongodb.MongoClient;
+var url = "mongodb://host:port/";
+
+client.connect(url, function (err, client) {
+
+    var db = client.db("test_db_VND");
+    var collection = db.collection("varianceanalysis_data");
+
+    var options = {
+        allowDiskUse: false
+    };
+
+    var pipeline = [
+        {
+            "$match": {
+                "cycle": new ObjectID("64e748625aa3bca053c2afd1")
+            }
+        },
+        {
+            "$lookup": {
+                "from": "varianceanalysis_commentary_cycle",
+                "localField": "cycle",
+                "foreignField": "_id",
+                "as": "cycle_info"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$cycle_info"
+            }
+        },
+        {
+            "$lookup": {
+                "from": "varianceanalysis_reportinunit_list",
+                "localField": "cycle_info.reportingunit",
+                "foreignField": "_id",
+                "as": "ru_info"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$ru_info"
+            }
+        },
+        {
+            "$set": {
+                "destinationUnits": "$ru_info.jv_destination_units",
+                "periodCurrent": "$cycle_info.period",
+                "source_ru_code": "$ru_info.code"
+            }
+        },
+        {
+            "$unset": [
+                "cycle_info",
+                "ru_info"
+            ]
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "cycle": 1,
+                "glcode": 1,
+                "commentary1": 1,
+                "commentary2": 1,
+                "regionalcommentary1": 1,
+                "regionalcommentary2": 1,
+                "savedcommentary1": 1,
+                "savedcommentary2": 1,
+                "periodCurrent": 1,
+                "destinationUnits": 1,
+                "source_ru_code": 1,
+                "stage_local": 1
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$destinationUnits"
+            }
+        },
+        {
+            "$lookup": {
+                "from": "varianceanalysis_reportinunit_list",
+                "localField": "destinationUnits",
+                "foreignField": "code",
+                "as": "destination_info"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$destination_info"
+            }
+        },
+        {
+            "$lookup": {
+                "from": "varianceanalysis_commentary_cycle",
+                "localField": "destination_info._id",
+                "foreignField": "reportingunit",
+                "as": "destination_cycle_info"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$destination_cycle_info"
+            }
+        },
+        {
+            "$match": {
+                "$expr": {
+                    "$eq": [
+                        "$destination_cycle_info.period",
+                        "$periodCurrent"
+                    ]
+                }
+            }
+        },
+        {
+            "$lookup": {
+                "from": "varianceanalysis_data",
+                "localField": "destination_cycle_info._id",
+                "foreignField": "cycle",
+                "as": "destination_cycle_gl_info"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$destination_cycle_gl_info"
+            }
+        },
+        {
+            "$match": {
+                "$expr": {
+                    "$eq": [
+                        "$destination_cycle_gl_info.glcode",
+                        "$glcode"
+                    ]
+                }
+            }
+        },
+        {
+            "$addFields": {
+                "jv_commentary1": {
+                    "$mergeObjects": [
+                        "$destination_cycle_gl_info.jv_commentary1",
+                        {
+                            "self": {
+                                "$toString": {
+                                    "$ifNull": [
+                                        "$destination_cycle_gl_info.commentary1",
+                                        ""
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "$arrayToObject": [
+                                {
+                                    "$concatArrays": [
+                                        [
+                                            {
+                                                "k": "$source_ru_code",
+                                                "v": "$commentary1"
+                                            }
+                                        ]
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "jv_commentary2": {
+                    "$mergeObjects": [
+                        "$destination_cycle_gl_info.jv_commentary2",
+                        {
+                            "self": {
+                                "$toString": {
+                                    "$ifNull": [
+                                        "$destination_cycle_gl_info.commentary1",
+                                        ""
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "$arrayToObject": [
+                                {
+                                    "$concatArrays": [
+                                        [
+                                            {
+                                                "k": "$source_ru_code",
+                                                "v": "$commentary2"
+                                            }
+                                        ]
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "jv_regional_commentary1": {
+                    "$mergeObjects": [
+                        "$destination_cycle_gl_info.jv_regional_commentary1",
+                        {
+                            "self": {
+                                "$toString": {
+                                    "$ifNull": [
+                                        "$destination_cycle_gl_info.regionalcommentary1",
+                                        ""
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "$arrayToObject": [
+                                {
+                                    "$concatArrays": [
+                                        [
+                                            {
+                                                "k": "$source_ru_code",
+                                                "v": "$regionalcommentary1"
+                                            }
+                                        ]
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "jv_regional_commentary2": {
+                    "$mergeObjects": [
+                        "$destination_cycle_gl_info.jv_regional_commentary2",
+                        {
+                            "self": {
+                                "$toString": {
+                                    "$ifNull": [
+                                        "$destination_cycle_gl_info.regionalcommentary2",
+                                        ""
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "$arrayToObject": [
+                                {
+                                    "$concatArrays": [
+                                        [
+                                            {
+                                                "k": "$source_ru_code",
+                                                "v": "$regionalcommentary2"
+                                            }
+                                        ]
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "$set": {
+                "destination _id": "$destination_cycle_gl_info._id"
+            }
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "glcode": 1,
+                "jv_commentary1": 1,
+                "jv_commentary2": 1,
+                "jv_regional_commentary1": 1,
+                "jv_regional_commentary2": 1,
+                "destination _id": 1,
+                "stage_local": 1
+            }
+        },
+        {
+            "$set": {
+                "source _id": "$_id",
+                "_id": "$destination _id",
+                "stage_local": {
+                    "$cond": {
+                        "if": {
+                            "$eq": [
+                                "$stage_local",
+                                0.0
+                            ]
+                        },
+                        "then": 0.0,
+                        "else": 1.0
+                    }
+                }
+            }
+        },
+        {
+            "$merge": {
+                "into": "varianceanalysis_data",
+                "whenMatched": [
+                    {
+                        "$set": {
+                            "jv_commentary1": "$$new.jv_commentary1",
+                            "jv_commentary2": "$$new.jv_commentary2",
+                            "jv_regional_commentary1": "$$new.jv_regional_commentary1",
+                            "jv_regional_commentary2": "$$new.jv_regional_commentary2",
+                            "stage_local": "$$new.stage_local"
+                        }
+                    }
+                ],
+                "whenNotMatched": "discard"
+            }
+        }
+    ];
+
+    var cursor = collection.aggregate(pipeline, options);
+
+    cursor.forEach(
+        function(doc) {
+            console.log(doc);
+        },
+        function(err) {
+            client.close();
+        }
+    );
+
+    // Created with Studio 3T, the IDE for MongoDB - https://studio3t.com/
+
+});
